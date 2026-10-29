@@ -40,6 +40,7 @@
       }
 
       const top = [...best.values()]
+        .filter(a => a.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
 
