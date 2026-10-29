@@ -86,10 +86,14 @@
     try {
       showAuth('Создаём аккаунт…');
 
-      const result = await request('/auth/v1/signup', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, data: { player_name: name } })
-      });
+      const result = await request(
+        '/auth/v1/signup?redirect_to=' +
+        encodeURIComponent('https://skkweryx.github.io/cosmo-blob/'),
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password, data: { player_name: name } })
+        }
+      );
 
       if (!result?.access_token || !result?.user) {
         showAuth('Аккаунт создан. Подтверди почту по письму, затем войди.');
