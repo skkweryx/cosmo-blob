@@ -8,15 +8,59 @@
 <div class="screen hidden" id="over"><div class="panel"><div class="eyebrow">RUN COMPLETE</div><h1>СТОЛКНОВЕНИЕ!</h1><p class="subtitle" id="overNick">Игрок</p><div style="font-size:58px;font-weight:1000;color:#ffe18b;text-shadow:0 0 24px #ffbc55" id="finalScore">0</div><p class="subtitle" id="newRecord"></p><div class="actions"><button id="againBtn">↻ ЕЩЁ РАЗ</button><button class="secondary" id="overRatingBtn">✦ МОЙ РЕЙТИНГ</button><button class="secondary" id="menuBtn">⌂ В ГЛАВНОЕ МЕНЮ</button></div></div></div>
 <div class="screen hidden" id="pause"><div class="panel"><div class="eyebrow">PAUSED</div><h1>ПАУЗА</h1><p class="subtitle">Космос подождёт.</p><div class="actions"><button id="resumeBtn">▶ ПРОДОЛЖИТЬ</button><button class="secondary" id="pauseMenuBtn">⌂ В МЕНЮ</button></div></div></div><div id="hint" class="hidden">КАСАЙСЯ ЭКРАНА, ЧТОБЫ ЛЕТЕТЬ</div>
 <script>
-(()=>{const canvas=document.querySelector('#game'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id);let W=0,H=0,dpr=1,last=0,state='menu',score=0,best=+(localStorage.getItem('cosmoBest')||0),player=localStorage.getItem('cosmoNick')||'',sound=true,audio=null,blob,obstacles=[],stars=[],particles=[],spawn=0,speed=200;
+(()=>{const canvas=document.querySelector('#game'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id);let W=0,H=0,dpr=1,last=0,state='menu',score=0,best=0,player=localStorage.getItem('cosmoNick')||'',sound=true,audio=null,blob,obstacles=[],stars=[],particles=[],spawn=0,speed=200;
 const rand=(a,b)=>a+Math.random()*(b-a);function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);stars=Array.from({length:Math.max(55,Math.floor(W*H/7000))},()=>({x:Math.random()*W,y:Math.random()*H,r:rand(.5,1.7),v:rand(8,34),a:rand(.25,.95),tw:rand(0,6)}));if(blob){blob.x=W*.27;blob.r=Math.max(15,Math.min(21,W*.047))}}
 function show(id){['menu','rating','how','over','pause'].forEach(s=>$(s).classList.toggle('hidden',s!==id));$('hud').classList.toggle('hidden',state!=='playing'&&state!=='paused');$('hint').classList.toggle('hidden',state!=='playing')}
 function unlockAudio(){try{audio=audio||(new(window.AudioContext||window.webkitAudioContext)());if(audio.state==='suspended')audio.resume().catch(()=>{});return audio}catch(e){return null}}
 function beep(f=440,d=.07,type='sine'){if(!sound)return;try{const a=unlockAudio();if(!a)return;const play=()=>{try{let o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(.04,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+d)}catch(e){}};if(a.state==='running')play();else a.resume().then(play).catch(()=>{})}catch(e){}}
-function savePlayer(){player=$('nickname').value.trim().replace(/[<>]/g,'').slice(0,16)||localStorage.getItem('cosmoNick')||'Блоб_'+Math.floor(100+Math.random()*900);$('nickname').value=player;localStorage.setItem('cosmoNick',player)}function loadPlayer(){const saved=localStorage.getItem('cosmoNick');if(saved)$('nickname').value=saved}loadPlayer();function scores(){try{return JSON.parse(localStorage.getItem('cosmoScores')||'[]')}catch(e){return []}}function safe(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function renderRating(){let a=scores();$('leaderboard').innerHTML=a.length?a.sort((x,y)=>y.score-x.score).slice(0,10).map((r,i)=>`<div class="leader-row"><div class="rank">${String(i+1).padStart(2,'0')}</div><div class="player">${safe(r.name)}</div><div class="points">${r.score} ✦</div></div>`).join(''):'<div class="empty">Пока нет результатов.<br>Сыграй первый раунд и займи первое место!</div>'}
+function savePlayer(){player=$('nickname').value.trim().replace(/[<>]/g,'').slice(0,16)||localStorage.getItem('cosmoNick')||'Блоб_'+Math.floor(100+Math.random()*900);$('nickname').value=player;localStorage.setItem('cosmoNick',player)}function loadPlayer(){const saved=localStorage.getItem('cosmoNick');if(saved)$('nickname').value=saved}loadPlayer();async function loadPersonalBest(){
+  const localKey='cosmoBest:'+player.toLowerCase();
+  const localBest=Number(localStorage.getItem(localKey)||0);
+
+  best=localBest;
+
+  const API='https://vliqyzpwdlowmldsimom.supabase.co';
+  const KEY='sb_publishable_2HcppiXu5sfoP7_i6aQe7Q_OxAmhf7M';
+
+  try{
+    const url=API+'/rest/v1/scores?select=score&player_name=eq.'
+      +encodeURIComponent(player)
+      +'&order=score.desc&limit=1';
+
+    const response=await fetch(url,{
+      headers:{
+        apikey:KEY,
+        Authorization:'Bearer '+KEY
+      }
+    });
+
+    if(!response.ok) throw new Error('Ошибка загрузки рекорда');
+
+    const rows=await response.json();
+    const serverBest=rows.length?Number(rows[0].score)||0:0;
+
+    best=Math.max(localBest,serverBest);
+    localStorage.setItem(localKey,String(best));
+  }catch(error){
+    console.warn('Не удалось загрузить личный рекорд:',error);
+  }
+}
+function scores(){try{return JSON.parse(localStorage.getItem('cosmoScores')||'[]')}catch(e){return []}}function safe(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function renderRating(){let a=scores();$('leaderboard').innerHTML=a.length?a.sort((x,y)=>y.score-x.score).slice(0,10).map((r,i)=>`<div class="leader-row"><div class="rank">${String(i+1).padStart(2,'0')}</div><div class="player">${safe(r.name)}</div><div class="points">${r.score} ✦</div></div>`).join(''):'<div class="empty">Пока нет результатов.<br>Сыграй первый раунд и займи первое место!</div>'}
 function reset(){score=0;speed=Math.max(190,Math.min(225,W*.5));spawn=0;obstacles=[];particles=[];blob={x:W*.27,y:H*.45,vy:0,r:Math.max(15,Math.min(21,W*.047))};$('scoreNow').textContent='0';$('bestNow').textContent=best}
-function start(){unlockAudio();savePlayer();reset();state='playing';show('');blob.vy=-370;beep(620,.08)}function flap(){if(state!=='playing')return;blob.vy=-390;beep(540,.045,'triangle');for(let i=0;i<5;i++)particles.push({x:blob.x-blob.r,y:blob.y+rand(-5,5),vx:rand(-95,-25),vy:rand(-55,55),life:rand(.2,.45),max:.45,r:rand(1.5,4),color:Math.random()>.5?'#d8a0ff':'#53f4ef'})}
-function endGame(){if(state!=='playing')return;state='over';beep(115,.22,'sawtooth');let old=best;best=Math.max(best,score);localStorage.setItem('cosmoBest',best);let a=scores();a.push({name:player,score,date:Date.now()});a.sort((x,y)=>y.score-x.score);localStorage.setItem('cosmoScores',JSON.stringify(a.slice(0,30)));$('finalScore').textContent=score;$('overNick').textContent=player+' — отличный полёт!';$('newRecord').textContent=score>old?'✦ НОВЫЙ РЕКОРД! ✦':'Твой рекорд: '+best;show('over')}
+async function start(){
+  unlockAudio();
+  savePlayer();
+  await loadPersonalBest();
+  reset();
+  state='playing';
+  show('');
+  blob.vy=-370;
+  beep(620,.08);
+}function flap(){if(state!=='playing')return;blob.vy=-390;beep(540,.045,'triangle');for(let i=0;i<5;i++)particles.push({x:blob.x-blob.r,y:blob.y+rand(-5,5),vx:rand(-95,-25),vy:rand(-55,55),life:rand(.2,.45),max:.45,r:rand(1.5,4),color:Math.random()>.5?'#d8a0ff':'#53f4ef'})}
+function endGame(){if(state!=='playing')return;state='over';beep(115,.22,'sawtooth');let old=best;
+best=Math.max(best,score);
+localStorage.setItem('cosmoBest:'+player.toLowerCase(),best);
+$('bestNow').textContent=best;let a=scores();a.push({name:player,score,date:Date.now()});a.sort((x,y)=>y.score-x.score);localStorage.setItem('cosmoScores',JSON.stringify(a.slice(0,30)));$('finalScore').textContent=score;$('overNick').textContent=player+' — отличный полёт!';$('newRecord').textContent=score>old?'✦ НОВЫЙ РЕКОРД! ✦':'Твой рекорд: '+best;show('over')}
 function spawnObstacle(){let gap=Math.max(150,Math.min(190,H*.235)),margin=65;obstacles.push({x:W+35,w:Math.max(56,Math.min(72,W*.16)),gapY:rand(margin+gap/2,H-margin-gap/2),gap,passed:false})}function rounded(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
 function background(dt){let g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#09071d');g.addColorStop(.5,'#201052');g.addColorStop(1,'#07172e');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);for(let s of stars){s.x-=s.v*dt*(state==='playing'?1:.25);s.tw+=dt*2;if(s.x<0)s.x=W;ctx.globalAlpha=s.a*(.75+.25*Math.sin(s.tw));ctx.fillStyle='#e8e4ff';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;ctx.save();ctx.translate(W*.8,H*.18);ctx.strokeStyle='#b7a2ff35';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,0,Math.min(W,H)*.13,Math.min(W,H)*.035,-.35,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#a66bff25';ctx.beginPath();ctx.arc(0,0,Math.min(W,H)*.085,0,Math.PI*2);ctx.fill();ctx.restore()}
 function drawBlob(){
